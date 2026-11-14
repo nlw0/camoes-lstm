@@ -1,3 +1,6 @@
+ENV["MLDATADEVICES_SILENCE_WARN_NO_GPU"] = "1"
+ENV["JULIA_CUDA_SILENT"] = "true"
+
 using Flux
 using Downloads
 using Statistics
@@ -31,8 +34,12 @@ model = Chain(
     LSTM(hidden => hidden),
     Dense(hidden => vocab_size)
 )
-model = CUDA.functional() ? model |> gpu : model
-println("Using GPU: ", CUDA.functional())
+
+use_gpu = CUDA.functional()
+println("Using GPU: ", use_gpu)
+if use_gpu
+    model = model |> gpu
+end
 
 # 4. Training
 seqlen = 64
@@ -40,6 +47,10 @@ function get_batch(chars, batch_size=32)
     starts = rand(1:length(chars)-seqlen-1, batch_size)
     xs = [Flux.onehotbatch([char_to_ix[chars[i]] for i in s:s+seqlen-1], 1:vocab_size) for s in starts]
     ys = [Flux.onehotbatch([char_to_ix[chars[i]] for i in s+1:s+seqlen], 1:vocab_size) for s in starts]
+    if use_gpu
+        xs = xs .|> gpu
+        ys = ys .|> gpu
+    end
     return xs, ys
 end
 
@@ -60,7 +71,7 @@ end
 function generate(model, seed::String, n::Int=250; temperature=0.8)
     Flux.reset!(model)
     result = seed
-    device = CUDA.functional() ? gpu : identity
+    device = use_gpu ? gpu : identity
 
     # Prime the model with the seed
     for c in seed
