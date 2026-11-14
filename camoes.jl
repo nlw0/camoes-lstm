@@ -6,6 +6,7 @@ using Downloads
 using Statistics
 using Random
 using CUDA
+using StatsBase
 
 # 1. Download Os Lusíadas
 url = "https://www.gutenberg.org/files/3333/3333-0.txt"
