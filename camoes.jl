@@ -56,17 +56,23 @@ for epoch in 1:30
     end
 end
 
-# 5. Generate
+# 5. Generate (fixed: LSTM needs 2D input)
 function generate(model, seed::String, n::Int=250; temperature=0.8)
     Flux.reset!(model)
     result = seed
+    device = CUDA.functional() ? gpu : identity
+
+    # Prime the model with the seed
     for c in seed
-        model(Flux.onehot(char_to_ix[c], 1:vocab_size) |> (CUDA.functional() ? gpu : identity))
+        oh = Flux.onehot(char_to_ix[c], 1:vocab_size)
+        model(reshape(oh, :, 1) |> device)   # shape (vocab, 1)
     end
+
     for _ in 1:n
-        input = Flux.onehot(char_to_ix[result[end]], 1:vocab_size) |> (CUDA.functional() ? gpu : identity)
-        probs = softmax(model(input) ./ temperature)
-        next_ix = sample(1:vocab_size, Weights(vec(probs)))
+        oh = Flux.onehot(char_to_ix[result[end]], 1:vocab_size)
+        logits = model(reshape(oh, :, 1) |> device)
+        probs = softmax(vec(logits) ./ temperature)
+        next_ix = sample(1:vocab_size, Weights(probs))
         result *= ix_to_char[next_ix]
     end
     return result
